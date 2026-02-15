@@ -5,14 +5,10 @@ load_dotenv()
 
 
 class Config:
-    # MetaApi
-    METAAPI_TOKEN = os.getenv("METAAPI_TOKEN", "")
-    METAAPI_ACCOUNT_ID = os.getenv("METAAPI_ACCOUNT_ID", "")
-
     # Webhook security
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
-    # Risk management
+    # Risk management defaults
     DEFAULT_LOT_SIZE = float(os.getenv("DEFAULT_LOT_SIZE", "0.01"))
     MAX_LOT_SIZE = float(os.getenv("MAX_LOT_SIZE", "1.0"))
     MAX_OPEN_TRADES = int(os.getenv("MAX_OPEN_TRADES", "5"))
