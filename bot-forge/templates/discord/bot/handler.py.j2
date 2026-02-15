@@ -1,0 +1,27 @@
+"""Discord bot handlers for {{ bot_name }}."""
+
+import logging
+
+import discord
+
+logger = logging.getLogger("{{ bot_name }}.handler")
+
+
+def setup_bot(client: discord.Client) -> None:
+    """Register event handlers on the Discord client."""
+
+    @client.event
+    async def on_ready():
+        logger.info("Logged in as %s", client.user)
+
+    @client.event
+    async def on_message(message: discord.Message):
+        if message.author == client.user:
+            return
+
+        {% if "echo" in features %}
+        await message.channel.send(message.content)
+        {% else %}
+        if message.content.startswith("!hello"):
+            await message.channel.send("Hello!")
+        {% endif %}

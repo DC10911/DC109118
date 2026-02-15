@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  bot-forge-api:
+    build: .
+    container_name: bot-forge-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/app/output
+      - ./data:/app/data
+    env_file:
+      - .env
+    entrypoint: ["python", "-m", "uvicorn", "ui.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  bot-forge-cli:
+    build: .
+    container_name: bot-forge-cli
+    volumes:
+      - ./output:/app/output
+      - ./data:/app/data
+    env_file:
+      - .env
+    entrypoint: ["python", "-m", "ui.cli"]
+    profiles:
+      - cli

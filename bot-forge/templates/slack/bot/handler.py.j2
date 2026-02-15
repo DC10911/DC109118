@@ -1,0 +1,25 @@
+"""Slack bot handlers for {{ bot_name }}."""
+
+import logging
+
+from slack_bolt import App
+
+logger = logging.getLogger("{{ bot_name }}.handler")
+
+
+def register_listeners(app: App) -> None:
+    """Register all Slack event listeners."""
+
+    {% if "echo" in features %}
+    @app.message("")
+    def echo_message(message, say):
+        text = message.get("text", "")
+        logger.debug("Echoing message: %s", text)
+        say(text)
+    {% else %}
+    @app.message("hello")
+    def hello_message(message, say):
+        say(f"Hello <@{message['user']}>!")
+    {% endif %}
+
+    logger.info("Slack listeners registered")

@@ -1,0 +1,15 @@
+"""Custom bot handlers for {{ bot_name }}."""
+
+import logging
+
+logger = logging.getLogger("{{ bot_name }}.handler")
+
+
+def handle_input(text: str) -> str:
+    """Process user input and return a response."""
+    logger.debug("Received input: %s", text)
+    {% if "echo" in features %}
+    return text
+    {% else %}
+    return f"Received: {text}"
+    {% endif %}

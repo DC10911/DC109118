@@ -1,0 +1,29 @@
+"""{{ bot_name }} — Telegram bot entry point."""
+
+import logging
+
+from bot.handler import setup_handlers
+from bot.logger_setup import setup_logger
+from config import LOG_LEVEL, TELEGRAM_BOT_TOKEN
+
+logger = setup_logger(level=LOG_LEVEL)
+
+
+def main() -> None:
+    from telegram.ext import ApplicationBuilder
+
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("TELEGRAM_BOT_TOKEN is not set. Exiting.")
+        raise SystemExit(1)
+
+    logger.info("Starting {{ bot_name }}...")
+
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    setup_handlers(app)
+
+    logger.info("Bot is running. Press Ctrl+C to stop.")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()

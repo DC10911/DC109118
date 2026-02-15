@@ -1,0 +1,25 @@
+"""{{ bot_name }} — Slack bot entry point."""
+
+from slack_bolt import App
+from bot.handler import register_listeners
+from bot.logger_setup import setup_logger
+from config import LOG_LEVEL, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET
+
+logger = setup_logger(level=LOG_LEVEL)
+
+
+def main() -> None:
+    if not SLACK_BOT_TOKEN or not SLACK_SIGNING_SECRET:
+        logger.error("SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET must be set. Exiting.")
+        raise SystemExit(1)
+
+    logger.info("Starting {{ bot_name }}...")
+    app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
+    register_listeners(app)
+
+    logger.info("Bot is running on port 3000.")
+    app.start(port=3000)
+
+
+if __name__ == "__main__":
+    main()

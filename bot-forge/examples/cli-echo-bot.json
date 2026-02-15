@@ -1,0 +1,12 @@
+{
+  "name": "my-cli-echo-bot",
+  "platform": "cli",
+  "description": "A command-line bot that echoes user input",
+  "features": ["echo"],
+  "env_vars": [],
+  "dependencies": [],
+  "include_docker": true,
+  "include_ci": true,
+  "include_tests": true,
+  "logging_level": "DEBUG"
+}

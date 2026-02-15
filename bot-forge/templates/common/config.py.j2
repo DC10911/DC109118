@@ -1,0 +1,16 @@
+"""Configuration loader for {{ bot_name }}."""
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env file from project root
+_env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(_env_path)
+
+{% for ev in env_vars %}
+{{ ev.name }} = os.getenv("{{ ev.name }}"{{ ', "' + ev.default + '"' if ev.default else '' }})
+{% endfor %}
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "{{ logging_level }}")

@@ -1,0 +1,24 @@
+"""Unit tests for {{ bot_name }} Web API handler."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from fastapi.testclient import TestClient
+from main import app
+
+client = TestClient(app)
+
+
+def test_health():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_message_endpoint():
+    response = client.post("/bot/message", json={"text": "hello"})
+    assert response.status_code == 200
+    data = response.json()
+    assert "hello" in data["reply"]

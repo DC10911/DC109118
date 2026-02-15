@@ -1,0 +1,12 @@
+"""Unit tests for {{ bot_name }} Discord handler."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+
+def test_setup_bot_callable():
+    """Verify setup_bot can be imported and is callable."""
+    from bot.handler import setup_bot
+    assert callable(setup_bot)

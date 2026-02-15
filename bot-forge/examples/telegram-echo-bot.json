@@ -1,0 +1,18 @@
+{
+  "name": "my-telegram-echo-bot",
+  "platform": "telegram",
+  "description": "A simple Telegram bot that echoes back any message it receives",
+  "features": ["echo"],
+  "env_vars": [
+    {
+      "name": "TELEGRAM_BOT_TOKEN",
+      "description": "Telegram Bot API token from @BotFather",
+      "required": true
+    }
+  ],
+  "dependencies": [],
+  "include_docker": true,
+  "include_ci": true,
+  "include_tests": true,
+  "logging_level": "INFO"
+}

@@ -1,0 +1,14 @@
+"""Unit tests for {{ bot_name }} handler."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from bot.handler import handle_input
+
+
+def test_handle_input():
+    result = handle_input("test")
+    assert isinstance(result, str)
+    assert len(result) > 0

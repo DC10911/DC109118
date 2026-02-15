@@ -1,0 +1,27 @@
+"""{{ bot_name }} — Discord bot entry point."""
+
+import discord
+from bot.handler import setup_bot
+from bot.logger_setup import setup_logger
+from config import DISCORD_BOT_TOKEN, LOG_LEVEL
+
+logger = setup_logger(level=LOG_LEVEL)
+
+
+def main() -> None:
+    if not DISCORD_BOT_TOKEN:
+        logger.error("DISCORD_BOT_TOKEN is not set. Exiting.")
+        raise SystemExit(1)
+
+    logger.info("Starting {{ bot_name }}...")
+    intents = discord.Intents.default()
+    intents.message_content = True
+    client = discord.Client(intents=intents)
+    setup_bot(client)
+
+    logger.info("Bot is running. Press Ctrl+C to stop.")
+    client.run(DISCORD_BOT_TOKEN)
+
+
+if __name__ == "__main__":
+    main()
