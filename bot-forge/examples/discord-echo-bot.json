@@ -1,0 +1,18 @@
+{
+  "name": "my-discord-echo-bot",
+  "platform": "discord",
+  "description": "A Discord bot that echoes messages back in the channel",
+  "features": ["echo"],
+  "env_vars": [
+    {
+      "name": "DISCORD_BOT_TOKEN",
+      "description": "Discord bot token from Developer Portal",
+      "required": true
+    }
+  ],
+  "dependencies": [],
+  "include_docker": true,
+  "include_ci": true,
+  "include_tests": true,
+  "logging_level": "INFO"
+}

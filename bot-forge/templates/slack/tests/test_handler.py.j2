@@ -1,0 +1,12 @@
+"""Unit tests for {{ bot_name }} Slack handler."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+
+def test_register_listeners_callable():
+    """Verify register_listeners can be imported and is callable."""
+    from bot.handler import register_listeners
+    assert callable(register_listeners)

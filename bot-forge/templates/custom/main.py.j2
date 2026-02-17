@@ -1,0 +1,25 @@
+"""{{ bot_name }} — Custom bot entry point."""
+
+from bot.handler import handle_input
+from bot.logger_setup import setup_logger
+from config import LOG_LEVEL
+
+logger = setup_logger(level=LOG_LEVEL)
+
+
+def main() -> None:
+    """{{ description }}"""
+    logger.info("Starting {{ bot_name }}...")
+    print("{{ bot_name }} is ready. Type your message (Ctrl+C to exit):")
+
+    try:
+        while True:
+            user_input = input("> ")
+            response = handle_input(user_input)
+            print(response)
+    except (KeyboardInterrupt, EOFError):
+        print("\nGoodbye!")
+
+
+if __name__ == "__main__":
+    main()

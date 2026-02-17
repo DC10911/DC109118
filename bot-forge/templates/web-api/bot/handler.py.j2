@@ -1,0 +1,29 @@
+"""Web API bot handlers for {{ bot_name }}."""
+
+import logging
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+logger = logging.getLogger("{{ bot_name }}.handler")
+
+router = APIRouter(prefix="/bot", tags=["bot"])
+
+
+class MessageRequest(BaseModel):
+    text: str
+
+
+class MessageResponse(BaseModel):
+    reply: str
+
+
+@router.post("/message", response_model=MessageResponse)
+async def handle_message(req: MessageRequest) -> MessageResponse:
+    """Process a message and return a response."""
+    logger.debug("Received: %s", req.text)
+    {% if "echo" in features %}
+    return MessageResponse(reply=req.text)
+    {% else %}
+    return MessageResponse(reply=f"Received: {req.text}")
+    {% endif %}

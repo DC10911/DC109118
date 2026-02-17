@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BOT-FORGE Spec Contract",
+  "version": "1.0.0",
+  "description": "Meta-bot factory system that generates production-ready bots from specifications",
+  "system": {
+    "name": "BOT-FORGE",
+    "type": "meta-bot-factory",
+    "pipeline": ["intake", "plan", "retrieve_docs", "generate", "test", "review", "package", "deploy"],
+    "stack": {
+      "language": "python",
+      "python_version": "3.11",
+      "api_framework": "fastapi",
+      "task_runner": "asyncio",
+      "storage": "sqlite",
+      "storage_abstraction": "repository_pattern",
+      "ui": "cli_primary_with_web_api",
+      "packaging": "docker",
+      "ci": "github_actions",
+      "templating": "jinja2"
+    }
+  },
+  "bot_spec_schema": {
+    "type": "object",
+    "required": ["name", "platform", "description"],
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Bot project name (slug-compatible)",
+        "pattern": "^[a-z][a-z0-9-]{1,48}[a-z0-9]$"
+      },
+      "platform": {
+        "type": "string",
+        "enum": ["telegram", "discord", "slack", "cli", "web-api", "custom"],
+        "description": "Target platform for the generated bot"
+      },
+      "description": {
+        "type": "string",
+        "description": "Short description of what the bot does"
+      },
+      "language": {
+        "type": "string",
+        "enum": ["python"],
+        "default": "python"
+      },
+      "features": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": ["echo"],
+        "description": "List of bot capabilities/features"
+      },
+      "env_vars": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "required": { "type": "boolean", "default": true },
+            "default": { "type": "string" }
+          },
+          "required": ["name", "description"]
+        },
+        "default": []
+      },
+      "dependencies": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Additional pip packages"
+      },
+      "include_docker": {
+        "type": "boolean",
+        "default": true
+      },
+      "include_ci": {
+        "type": "boolean",
+        "default": true
+      },
+      "include_tests": {
+        "type": "boolean",
+        "default": true
+      },
+      "logging_level": {
+        "type": "string",
+        "enum": ["DEBUG", "INFO", "WARNING", "ERROR"],
+        "default": "INFO"
+      }
+    }
+  },
+  "pipeline_stages": {
+    "intake": {
+      "description": "Parse and validate incoming bot spec",
+      "input": "bot_spec (JSON)",
+      "output": "validated_spec"
+    },
+    "plan": {
+      "description": "Generate project plan: file list, dependency graph, feature mapping",
+      "input": "validated_spec",
+      "output": "project_plan"
+    },
+    "retrieve_docs": {
+      "description": "Fetch relevant docs/best-practices for platform and dependencies",
+      "input": "project_plan",
+      "output": "context_docs"
+    },
+    "generate": {
+      "description": "Render project files from templates using spec + context",
+      "input": "project_plan + context_docs",
+      "output": "generated_files"
+    },
+    "test": {
+      "description": "Run linting (ruff) and unit tests (pytest) on generated code",
+      "input": "generated_files",
+      "output": "test_results"
+    },
+    "review": {
+      "description": "Static analysis, security check, structure validation",
+      "input": "generated_files + test_results",
+      "output": "review_report"
+    },
+    "package": {
+      "description": "Bundle into distributable project with Docker",
+      "input": "reviewed_files",
+      "output": "packaged_project"
+    },
+    "deploy": {
+      "description": "Output final project to filesystem or archive",
+      "input": "packaged_project",
+      "output": "deploy_path"
+    }
+  },
+  "defaults": {
+    "output_dir": "./output",
+    "db_path": "./data/botforge.db",
+    "log_level": "INFO",
+    "host": "0.0.0.0",
+    "port": 8000
+  }
+}
