@@ -1,0 +1,5 @@
+body { font-family: Arial, sans-serif; background: #0b1220; color: #f4f7fb; margin: 0; }
+main { max-width: 760px; margin: 60px auto; padding: 24px; background: #121a2b; border-radius: 12px; }
+h1 { margin-top: 0; }
+code { background: #1f2a44; padding: 2px 6px; border-radius: 4px; }
+.note { margin-top: 20px; color: #97c3ff; }
