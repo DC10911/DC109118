@@ -1,0 +1,282 @@
+//@version=6
+indicator("DC ALPHA — Market Cognition Engine v1.0", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
+
+//=============================================================================
+// 1. INPUTS
+//=============================================================================
+
+// ── General ──────────────────────────────────────────────────────────────────
+i_mode           = input.string("Clean",  "Mode",           options=["Clean","Mapping","Debug","Audit"], group="General")
+i_profile        = input.string("Forex",  "Market Profile", options=["Forex","Crypto","Futures","Custom"], group="General")
+i_confirmClose   = input.bool(true,  "Confirm signals after bar close",  group="General")
+i_minBarsBetween = input.int(7,      "Min bars between signals",         minval=1, group="General")
+i_showTable      = input.bool(true,  "Show confirmation table",          group="General")
+
+// ── Market Structure ─────────────────────────────────────────────────────────
+i_swingLenInt    = input.int(3,    "Swing length (internal)", minval=1,   group="Market Structure")
+i_swingLenExt    = input.int(10,   "Swing length (external)", minval=1,   group="Market Structure")
+i_bosClose       = input.bool(true, "BOS close confirmation",             group="Market Structure")
+i_bosAtrMult     = input.float(0.15,"Min BOS distance (ATR mult)",  minval=0.01, step=0.01, group="Market Structure")
+i_showBOS        = input.bool(false,"Show BOS",                           group="Market Structure")
+i_showCHOCH      = input.bool(true, "Show CHOCH",                         group="Market Structure")
+
+// ── Liquidity ────────────────────────────────────────────────────────────────
+i_eqhAtrTol      = input.float(0.10,"EQH/EQL tolerance (ATR mult)",  minval=0.01, step=0.01, group="Liquidity")
+i_eqMinDist      = input.int(5,    "Min distance EQH/EQL (bars)",    minval=1,  group="Liquidity")
+i_eqMaxDist      = input.int(80,   "Max distance EQH/EQL (bars)",    minval=1,  group="Liquidity")
+i_sweepRatio     = input.float(1.5, "Sweep wick/body ratio",          minval=0.1, step=0.1, group="Liquidity")
+i_showLiq        = input.bool(true, "Show liquidity",                      group="Liquidity")
+i_showRecentLiq  = input.bool(true, "Show only recent liquidity",          group="Liquidity")
+i_maxLiqZones    = input.int(20,   "Max liquidity zones displayed",   minval=1,  group="Liquidity")
+
+// ── SMC / POI ────────────────────────────────────────────────────────────────
+i_showOB         = input.bool(true,  "Show Order Blocks",                  group="SMC / POI")
+i_showFVG        = input.bool(true,  "Show FVG",                           group="SMC / POI")
+i_showIMB        = input.bool(false, "Show Imbalance",                     group="SMC / POI")
+i_showGAP        = input.bool(false, "Show GAP",                           group="SMC / POI")
+i_maxOB          = input.int(15,    "Max active OB zones",            minval=1,  group="SMC / POI")
+i_maxFVG         = input.int(20,    "Max active FVG zones",            minval=1,  group="SMC / POI")
+i_fvgAtrMin      = input.float(0.10, "Min FVG size (ATR mult)",        minval=0.01, step=0.01, group="SMC / POI")
+i_deleteMit      = input.bool(false, "Delete mitigated zones",             group="SMC / POI")
+i_fadeMit        = input.bool(true,  "Fade mitigated zones",               group="SMC / POI")
+
+// ── Momentum ─────────────────────────────────────────────────────────────────
+i_rsiLen         = input.int(14,    "RSI length",          minval=1,        group="Momentum")
+i_rsiBullThr     = input.float(50.0,"RSI bull threshold",  minval=1, maxval=99, group="Momentum")
+i_rsiBearThr     = input.float(50.0,"RSI bear threshold",  minval=1, maxval=99, group="Momentum")
+i_rocLen         = input.int(9,     "ROC length",          minval=1,        group="Momentum")
+i_useRsiDiv      = input.bool(false, "Use RSI divergence (MVP off)",        group="Momentum")
+i_useRocAccel    = input.bool(true,  "Use ROC acceleration",                group="Momentum")
+
+// ── Regime ───────────────────────────────────────────────────────────────────
+i_atrLen         = input.int(14,    "ATR length",             minval=1,     group="Regime")
+i_atrBaseLen     = input.int(50,    "ATR baseline length",     minval=1,     group="Regime")
+i_rangeFilter    = input.bool(true,  "Range filter enabled",                 group="Regime")
+i_atrCompThr     = input.float(0.75, "ATR compression threshold", minval=0.01, step=0.01, group="Regime")
+i_atrExpThr      = input.float(1.15, "ATR expansion threshold",  minval=0.01, step=0.01, group="Regime")
+i_emaSlopeLen    = input.int(50,    "EMA slope length",          minval=1,   group="Regime")
+i_chopDetect     = input.bool(true,  "Chop detection enabled",               group="Regime")
+
+// ── Scoring ──────────────────────────────────────────────────────────────────
+i_minScoreAlert  = input.int(70,  "Min score for alert",    minval=0, maxval=100, group="Scoring")
+i_minScoreSig    = input.int(80,  "Min score for signal",   minval=0, maxval=100, group="Scoring")
+i_minScoreAPlus  = input.int(90,  "Min score for A+ setup", minval=0, maxval=100, group="Scoring")
+i_reqHTFBias     = input.bool(true, "Require HTF bias",                     group="Scoring")
+i_reqLiqOrStr    = input.bool(true, "Require liquidity or structure event",  group="Scoring")
+i_reqPOI         = input.bool(true, "Require POI proximity",                 group="Scoring")
+i_minRR          = input.float(2.0, "Minimum RR", minval=0.1, step=0.1,     group="Scoring")
+
+// ── Risk ─────────────────────────────────────────────────────────────────────
+i_atrStopBuf     = input.float(0.20, "ATR stop buffer", minval=0.01, step=0.01, group="Risk")
+i_tp1Mode        = input.string("Nearest Internal Liquidity", "TP1 mode", options=["Nearest Internal Liquidity","1R"], group="Risk")
+i_tp2Mode        = input.string("Opposite Structure",          "TP2 mode", options=["Opposite Structure","2R"],         group="Risk")
+i_tp3Mode        = input.string("HTF Liquidity",               "TP3 mode", options=["HTF Liquidity","3R"],              group="Risk")
+i_moveSLtoBE     = input.bool(true, "Move SL to breakeven after TP1",       group="Risk")
+i_showSLTP       = input.bool(true, "Show SL/TP levels",                     group="Risk")
+
+// ── Visuals ──────────────────────────────────────────────────────────────────
+i_showSignals    = input.bool(true,  "Show signal labels", group="Visuals")
+i_showDebug      = input.bool(false, "Show debug labels",  group="Visuals")
+
+//=============================================================================
+// 2. CONSTANTS / TYPES
+//=============================================================================
+
+int BIAS_NONE =  0
+int BIAS_BULL =  1
+int BIAS_BEAR = -1
+
+//=============================================================================
+// 3. UTILITY FUNCTIONS
+//=============================================================================
+
+safeDiv(n, d) =>
+    d == 0.0 ? 0.0 : n / d
+
+clamp(val, lo, hi) =>
+    math.max(lo, math.min(hi, val))
+
+boolToScore(b, weight) =>
+    b ? weight : 0.0
+
+//=============================================================================
+// 4. NORMALIZATION ENGINE
+//=============================================================================
+
+float candleRange   = high - low
+float candleBody    = math.abs(close - open)
+float upperWick     = high - math.max(open, close)
+float lowerWick     = math.min(open, close) - low
+float bodyPct       = safeDiv(candleBody, candleRange)
+float upperPct      = safeDiv(upperWick,  candleRange)
+float lowerPct      = safeDiv(lowerWick,  candleRange)
+float closeLocation = safeDiv(close - low, candleRange)
+
+float atr           = ta.atr(i_atrLen)
+float atrBaseline   = ta.sma(atr, i_atrBaseLen)
+float atrRatio      = safeDiv(atr, atrBaseline)
+
+//=============================================================================
+// 5. CANDLE INTELLIGENCE ENGINE
+//=============================================================================
+
+bool doji         = bodyPct <= 0.18
+bool bullIntent   = close > open and bodyPct >= 0.55 and closeLocation >= 0.70
+bool bearIntent   = close < open and bodyPct >= 0.55 and closeLocation <= 0.30
+bool displacement = candleBody >= atr * 1.20 and bodyPct >= 0.55
+
+//=============================================================================
+// 6. STRUCTURE ENGINE  (Stage 1 — placeholders for Stage 0)
+//=============================================================================
+
+var float lastSwingHigh = na
+var float lastSwingLow  = na
+var int   structureBias = 0   // 0=none 1=bull -1=bear
+
+bool bullBOS   = false
+bool bearBOS   = false
+bool bullCHOCH = false
+bool bearCHOCH = false
+
+//=============================================================================
+// 7. LIQUIDITY ENGINE  (Stage 2 — placeholders for Stage 0)
+//=============================================================================
+
+bool eqhDetected = false
+bool eqlDetected = false
+bool bullSweep   = false
+bool bearSweep   = false
+
+//=============================================================================
+// 8. SMC ZONE ENGINE  (Stage 3 — placeholders for Stage 0)
+//=============================================================================
+
+bool bullOBActive  = false
+bool bearOBActive  = false
+bool bullFVGActive = false
+bool bearFVGActive = false
+bool poiProximity  = false
+
+//=============================================================================
+// 9. MOMENTUM ENGINE
+//=============================================================================
+
+float rsiValue     = ta.rsi(close, i_rsiLen)
+bool  rsiRising    = rsiValue > rsiValue[1]
+bool  rsiBull      = rsiValue > i_rsiBullThr and rsiRising
+bool  rsiBear      = rsiValue < i_rsiBearThr and not rsiRising
+
+float rocValue     = safeDiv(close - close[i_rocLen], close[i_rocLen]) * 100.0
+bool  rocBullAccel = rocValue > 0.0 and rocValue > rocValue[1]
+bool  rocBearAccel = rocValue < 0.0 and rocValue < rocValue[1]
+
+bool momentumLong  = rsiBull or  (i_useRocAccel and rocBullAccel)
+bool momentumShort = rsiBear or  (i_useRocAccel and rocBearAccel)
+
+//=============================================================================
+// 10. REGIME ENGINE
+//=============================================================================
+
+float ema50         = ta.ema(close, i_emaSlopeLen)
+bool  volExpansion  = atrRatio > i_atrExpThr
+bool  volCompression= atrRatio < i_atrCompThr
+bool  emaFlat       = math.abs(ema50 - ema50[10]) <= atr * 0.30
+bool  rangeState    = i_rangeFilter and volCompression and emaFlat
+
+//=============================================================================
+// 11. CONFLUENCE SCORING ENGINE  (Stage 5 — placeholders for Stage 0)
+//=============================================================================
+
+float longScore  = 0.0
+float shortScore = 0.0
+bool  longWatch  = false
+bool  shortWatch = false
+bool  longSignal = false
+bool  shortSignal= false
+
+//=============================================================================
+// 12. RISK ENGINE  (Stage 6 — placeholders for Stage 0)
+//=============================================================================
+
+float entryPrice = na
+float stopLoss   = na
+float tp1        = na
+float tp2        = na
+float tp3        = na
+float riskReward = na
+
+//=============================================================================
+// 13. VISUAL ENGINE  (Stage 7 — signal labels, boxes, lines)
+//=============================================================================
+
+// Signals, SL/TP lines, OB/FVG boxes drawn here in later stages
+
+//=============================================================================
+// 14. TABLE ENGINE
+//=============================================================================
+
+var table confirmTable = na
+
+if barstate.isfirst and i_showTable
+    confirmTable := table.new(
+         position.top_right, 2, 12,
+         bgcolor      = color.new(color.black, 55),
+         border_color = color.new(color.gray,  50),
+         border_width = 1,
+         frame_color  = color.new(color.gray,  50),
+         frame_width  = 1)
+
+if i_showTable and not na(confirmTable)
+    string decisionStr  = longSignal ? "LONG" : shortSignal ? "SHORT" : "WAIT"
+    color  decisionClr  = longSignal ? color.lime : shortSignal ? color.red : color.gray
+
+    string regimeStr    = volExpansion   ? "EXPANSION" : volCompression ? "COMPRESSION" : "NORMAL"
+    color  regimeClr    = volExpansion   ? color.orange : volCompression ? color.blue : color.gray
+
+    string rangeStr     = rangeState ? "RANGE" : "TREND"
+    color  rangeClr     = rangeState ? color.gray : color.teal
+
+    // Header
+    table.cell(confirmTable, 0,  0, "DC ALPHA v1.0", text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 20))
+    table.cell(confirmTable, 1,  0, i_mode,           text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 20))
+
+    // Candle metrics
+    table.cell(confirmTable, 0,  1, "ATR",             text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  1, str.tostring(atr, "#.#####"),           text_color=color.aqua,   text_size=size.tiny)
+    table.cell(confirmTable, 0,  2, "Body %",           text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  2, str.tostring(bodyPct * 100.0, "#.#") + "%", text_color=color.aqua, text_size=size.tiny)
+
+    // Candle flags
+    table.cell(confirmTable, 0,  3, "Doji",             text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  3, doji        ? "YES" : "—", text_color=doji        ? color.yellow : color.gray, text_size=size.tiny)
+    table.cell(confirmTable, 0,  4, "Bull Intent",      text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  4, bullIntent   ? "YES" : "—", text_color=bullIntent  ? color.green  : color.gray, text_size=size.tiny)
+    table.cell(confirmTable, 0,  5, "Bear Intent",      text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  5, bearIntent   ? "YES" : "—", text_color=bearIntent  ? color.red    : color.gray, text_size=size.tiny)
+    table.cell(confirmTable, 0,  6, "Displacement",     text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  6, displacement ? "YES" : "—", text_color=displacement? color.orange : color.gray, text_size=size.tiny)
+
+    // Regime
+    table.cell(confirmTable, 0,  7, "Vol Regime",       text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  7, regimeStr,          text_color=regimeClr,   text_size=size.tiny)
+    table.cell(confirmTable, 0,  8, "Range State",      text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  8, rangeStr,           text_color=rangeClr,    text_size=size.tiny)
+
+    // Scores
+    table.cell(confirmTable, 0,  9, "Long Score",       text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1,  9, str.tostring(math.round(longScore)),  text_color=color.lime, text_size=size.tiny)
+    table.cell(confirmTable, 0, 10, "Short Score",      text_color=color.white, text_size=size.tiny)
+    table.cell(confirmTable, 1, 10, str.tostring(math.round(shortScore)), text_color=color.red,  text_size=size.tiny)
+
+    // Decision
+    table.cell(confirmTable, 0, 11, "Decision",         text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 40))
+    table.cell(confirmTable, 1, 11, decisionStr,        text_color=decisionClr,  text_size=size.small, bgcolor=color.new(color.navy, 40))
+
+//=============================================================================
+// 15. ALERTS
+//=============================================================================
+
+alertcondition(longWatch,   "DC ALPHA Long Watch",   "DC ALPHA Long Watch — Setup forming")
+alertcondition(shortWatch,  "DC ALPHA Short Watch",  "DC ALPHA Short Watch — Setup forming")
+alertcondition(longSignal,  "DC ALPHA Long Signal",  "DC ALPHA Confirmed LONG signal")
+alertcondition(shortSignal, "DC ALPHA Short Signal", "DC ALPHA Confirmed SHORT signal")
