@@ -1,0 +1,176 @@
+name: MONEY MOTION Public Security Probe
+
+on:
+  push:
+    branches:
+      - money-motion-security-probe
+    paths:
+      - '.github/workflows/money-motion-public-security-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TARGET: https://money-motion-v3-o24ixw.v2.appdeploy.ai/
+  HOST: money-motion-v3-o24ixw.v2.appdeploy.ai
+  EDGE: https://ujvdzpztvqlygigbcvya.supabase.co/functions/v1/money-motion-connections
+
+jobs:
+  passive-security:
+    name: Passive web, TLS, auth-boundary checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Enforce fixed authorization scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$TARGET" = 'https://money-motion-v3-o24ixw.v2.appdeploy.ai/'
+          test "$HOST" = 'money-motion-v3-o24ixw.v2.appdeploy.ai'
+          test "$EDGE" = 'https://ujvdzpztvqlygigbcvya.supabase.co/functions/v1/money-motion-connections'
+          mkdir -p reports bin
+
+      - name: HTTPS and security-header evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 20 --proto '=https' --tlsv1.2 -D reports/headers.txt -o reports/homepage.html "$TARGET"
+          python3 - <<'PY'
+          from pathlib import Path
+          raw=Path('reports/headers.txt').read_text(errors='replace')
+          blocks=[b for b in raw.replace('\r','').split('\n\n') if b.strip()]
+          final=blocks[-1] if blocks else raw
+          headers={}
+          for line in final.splitlines()[1:]:
+              if ':' in line:
+                  k,v=line.split(':',1); headers[k.lower().strip()]=v.strip()
+          checks={
+            'strict-transport-security': 'HSTS',
+            'content-security-policy': 'CSP response header',
+            'x-content-type-options': 'X-Content-Type-Options',
+            'referrer-policy': 'Referrer-Policy',
+            'permissions-policy': 'Permissions-Policy',
+          }
+          missing=[]
+          for key,label in checks.items():
+              ok=bool(headers.get(key)); print(f'{label}: '+('PASS' if ok else 'MISSING'))
+              if not ok: missing.append(label)
+          clickjack=bool(headers.get('x-frame-options')) or 'frame-ancestors' in headers.get('content-security-policy','').lower()
+          print('Clickjacking response-header control: '+('PASS' if clickjack else 'MISSING'))
+          if not clickjack: missing.append('frame-ancestors/X-Frame-Options')
+          Path('reports/header-summary.txt').write_text('\n'.join(missing))
+          if missing:
+              print('HEADER GATE: FAIL ('+str(len(missing))+' missing controls)')
+              raise SystemExit(10)
+          print('HEADER GATE: PASS')
+          PY
+
+      - name: TLS certificate and protocol checks
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 20 openssl s_client -connect "$HOST:443" -servername "$HOST" -verify_return_error </dev/null > reports/tls12.txt 2>&1
+          grep -q 'Verify return code: 0 (ok)' reports/tls12.txt
+          if timeout 15 openssl s_client -tls1 -connect "$HOST:443" -servername "$HOST" </dev/null > reports/tls10.txt 2>&1 && grep -q 'Protocol  *: TLSv1$' reports/tls10.txt; then
+            echo 'TLS 1.0: FAIL (accepted)'; exit 11
+          else
+            echo 'TLS 1.0: PASS (rejected)'
+          fi
+          if timeout 15 openssl s_client -tls1_1 -connect "$HOST:443" -servername "$HOST" </dev/null > reports/tls11.txt 2>&1 && grep -q 'Protocol  *: TLSv1.1$' reports/tls11.txt; then
+            echo 'TLS 1.1: FAIL (accepted)'; exit 12
+          else
+            echo 'TLS 1.1: PASS (rejected)'
+          fi
+          echo 'Certificate verification: PASS'
+
+      - name: Supabase Edge unauthenticated boundary probe
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in 'https://evil.invalid' 'https://money-motion-v3-o24ixw.v2.appdeploy.ai'; do
+            code=$(curl --silent --show-error --max-time 15 -o reports/edge-body.txt -w '%{http_code}' \
+              -X POST "$EDGE" \
+              -H 'content-type: application/json' \
+              -H "origin: $origin" \
+              --data '{"action":"list"}' || true)
+            echo "Unauthenticated Edge request [$origin] => HTTP $code"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              echo 'AUTH BOUNDARY: FAIL - unauthenticated request received 2xx'; exit 13
+            fi
+            if grep -Eqi '(refresh_token|access_token|service_role|client_secret|otp_hash|MONEY_MOTION_TOKEN_ENCRYPTION_KEY)' reports/edge-body.txt; then
+              echo 'AUTH BOUNDARY: FAIL - sensitive marker in error body'; exit 14
+            fi
+          done
+          echo 'Unauthenticated Edge boundary: PASS'
+
+      - name: Install checksum-pinned Nuclei 3.9.0
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --retry 3 \
+            -o bin/nuclei.zip 'https://github.com/projectdiscovery/nuclei/releases/download/v3.9.0/nuclei_3.9.0_linux_amd64.zip'
+          echo '05357e07886d9670e9c54325ec8afd362d03610c87e2aa1455886ad3f7b58519  bin/nuclei.zip' | sha256sum -c -
+          unzip -q bin/nuclei.zip -d bin nuclei
+          chmod 0755 bin/nuclei
+          bin/nuclei -version
+
+      - name: Nuclei low-rate exposure and misconfiguration probe
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin/nuclei -u "$TARGET" \
+            -tags exposure,misconfig,ssl \
+            -severity info,low,medium,high,critical \
+            -rl 2 -c 1 -timeout 8 -retries 1 -ni -silent -jsonl -o reports/nuclei.jsonl || true
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('reports/nuclei.jsonl')
+          counts={k:0 for k in ('info','low','medium','high','critical')}; names=[]
+          if p.exists():
+              for line in p.read_text(errors='replace').splitlines():
+                  try: x=json.loads(line)
+                  except Exception: continue
+                  sev=str(x.get('info',{}).get('severity','info')).lower(); counts[sev]=counts.get(sev,0)+1
+                  tid=str(x.get('template-id','unknown'))
+                  names.append((sev,tid))
+          print('Nuclei severity counts:', counts)
+          for sev,tid in names[:50]: print(f'NUCLEI {sev.upper()}: {tid}')
+          if counts.get('high',0) or counts.get('critical',0):
+              print('NUCLEI GATE: FAIL'); raise SystemExit(20)
+          print('NUCLEI GATE: PASS (no high/critical findings)')
+          PY
+
+      - name: OWASP ZAP passive baseline
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          docker run --rm -v "$PWD/reports:/zap/wrk/:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "$TARGET" -m 2 -J zap.json -I >/dev/null 2>&1
+          zrc=$?
+          echo "$zrc" > reports/zap.exit
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('reports/zap.json'); counts={'0':0,'1':0,'2':0,'3':0}; alerts=[]
+          if p.exists():
+              try: data=json.loads(p.read_text(errors='replace'))
+              except Exception: data={}
+              for site in data.get('site',[]):
+                  for a in site.get('alerts',[]):
+                      risk=str(a.get('riskcode','0')); counts[risk]=counts.get(risk,0)+1
+                      alerts.append((risk,str(a.get('name','unknown'))))
+          print('ZAP risk counts [info,low,medium,high]:', counts)
+          for risk,name in alerts[:50]: print(f'ZAP RISK {risk}: {name}')
+          if counts.get('3',0):
+              print('ZAP GATE: FAIL (high-risk alert)'); raise SystemExit(30)
+          print('ZAP GATE: PASS (no high-risk alerts)')
+          PY
+          if [ "$zrc" -eq 3 ]; then echo 'ZAP execution error'; exit 31; fi
+          exit 0
